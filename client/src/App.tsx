@@ -25,7 +25,7 @@ type HistoryEntry = {
 const Sidebar: React.FC = () => {
   return (
     <div className="sidebar">
-      <h2 className="sidebar-title">Harjumuste Jälgija</h2>
+      <h2 className="sidebar-title">Habit Tracker</h2>
       <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
         Avaleht
       </NavLink>

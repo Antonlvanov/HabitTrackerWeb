@@ -1,0 +1,39 @@
+# Игнорировать папки node_modules
+node_modules/
+client/node_modules/
+
+# Игнорировать папку сборки
+client/dist/
+
+# Игнорировать файлы логов
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Игнорировать временные файлы
+*.tmp
+*.temp
+
+# Игнорировать файлы IDE/редакторов
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Игнорировать файлы окружения
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Игнорировать файлы кэша
+.cache/
+dist/
+
+# Игнорировать файлы сборки TypeScript
+*.tsbuildinfo

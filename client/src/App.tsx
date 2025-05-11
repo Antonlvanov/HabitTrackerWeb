@@ -25,7 +25,7 @@ type HistoryEntry = {
 const Sidebar: React.FC = () => {
   return (
     <div className="sidebar">
-      <h2 className="sidebar-title">Habit Tracker</h2>
+      <h2 className="sidebar-title">Harjumuste Jälgija</h2>
       <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
         Avaleht
       </NavLink>
@@ -52,10 +52,20 @@ const Home: React.FC = () => {
     const storedHistory = localStorage.getItem('history');
     if (storedHabits) setHabits(JSON.parse(storedHabits));
     if (storedHistory) setHistory(JSON.parse(storedHistory));
+
+    // Слушатель изменений в localStorage
+    const handleStorageChange = () => {
+      const updatedHistory = localStorage.getItem('history');
+      const updatedHabits = localStorage.getItem('habits');
+      setHistory(updatedHistory ? JSON.parse(updatedHistory) : []);
+      setHabits(updatedHabits ? JSON.parse(updatedHabits) : []);
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const activeHabits = habits.filter((habit) => habit.isActive).slice(0, 4);
-  const recentHistory = history.slice(0, 5);
+  const recentHistory = history.slice(-5).reverse(); // Последние 5 записей в обратном порядке
   const positiveProgress = activeHabits
     .filter((h) => h.category === 'positive')
     .reduce((sum, h) => sum + h.progress.reduce((s, p) => s + p.count, 0), 0);
@@ -90,7 +100,7 @@ const Home: React.FC = () => {
       <h1>Avaleht</h1>
       <p className="motivation">{motivation}</p>
       <div className="overview">
-        <div className="overview-section">
+        <div className="overview-section habits-section">
           <h2>Aktiivsed Harjumused</h2>
           {activeHabits.length === 0 ? (
             <p className="empty-text">Aktiivseid harjumusi pole. Lisa uus!</p>
@@ -102,7 +112,7 @@ const Home: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="overview-section">
+        <div className="overview-section history-section">
           <h2>Viimased Tegevused</h2>
           {recentHistory.length === 0 ? (
             <p className="empty-text">Ajaloo kirjeid pole.</p>
@@ -119,12 +129,12 @@ const Home: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="overview-section">
+        <div className="overview-section stats-section">
           <h2>Nädala Statistika</h2>
           {statsData.every((d) => d.positive === 0 && d.negative === 0) ? (
             <p className="empty-text">Andmed puuduvad.</p>
           ) : (
-            <LineChart width={400} height={200} data={statsData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <LineChart width={600} height={300} data={statsData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
@@ -150,15 +160,27 @@ const HabitCard: React.FC<{
     const updatedHabits = [...JSON.parse(localStorage.getItem('habits') || '[]')];
     const habitIndex = updatedHabits.findIndex((h: Habit) => h.id === habit.id);
     const today = new Date().toISOString().split('T')[0];
-    updatedHabits[habitIndex].progress.push({ date: today, count: 1 });
+
+    // Проверяем, есть ли запись за сегодня
+    const todayProgressIndex = updatedHabits[habitIndex].progress.findIndex((p: { date: string; count: number }) => p.date === today);
+    if (todayProgressIndex !== -1) {
+      // Увеличиваем count, если запись существует
+      updatedHabits[habitIndex].progress[todayProgressIndex].count += 1;
+    } else {
+      // Создаём новую запись, если записи нет
+      updatedHabits[habitIndex].progress.push({ date: today, count: 1 });
+    }
+
     localStorage.setItem('habits', JSON.stringify(updatedHabits));
     setHabits(updatedHabits);
 
+    // Создаём новую запись в истории с текущим count
+    const todayCount = updatedHabits[habitIndex].progress.find((p: { date: string; count: number }) => p.date === today)?.count || 1;
     const newHistoryEntry: HistoryEntry = {
       id: Date.now().toString(),
       habitId: habit.id,
       date: today,
-      count: 1,
+      count: todayCount,
       category: habit.category,
     };
     addHistoryEntry(newHistoryEntry);
@@ -173,15 +195,20 @@ const HabitCard: React.FC<{
     setHabits(updatedHabits);
   };
 
+  // Подсчёт выполнений за сегодня
+  const today = new Date().toISOString().split('T')[0];
+  const todayCount = habit.progress.find((p) => p.date === today)?.count || 0;
+
   return (
     <div className={`habit-card ${habit.category === 'positive' ? 'positive' : 'negative'}`}>
-      <h3>
-        {habit.category === 'positive' ? '✅ ' : '❌ '}
-        {habit.name}
-      </h3>
+      <h3>{habit.name}</h3>
       <p>Sagedus: {habit.frequency === 'daily' ? 'Igapäevane' : 'Iganädalane'}</p>
       <p>Kategooria: {habit.category === 'positive' ? 'Positiivne' : 'Negatiivne'}</p>
-      <button className="track-button" onClick={handleTrack}>
+      <p>Täna: {todayCount} korda</p>
+      <button
+        className={`track-button ${habit.category === 'positive' ? 'positive' : 'negative'}`}
+        onClick={handleTrack}
+      >
         {habit.category === 'positive' ? 'Märgi Täitmine' : 'Märgi Ebaõnnestumine'}
       </button>
       <button className="toggle-active-button" onClick={toggleActive}>
@@ -205,6 +232,14 @@ const Habits: React.FC = () => {
   const filteredHabits = habits.filter((habit) =>
     habit.isActive === (tab === 'active') && (category === 'all' || habit.category === category)
   );
+
+  const handleClearData = () => {
+    if (window.confirm('Kas olete kindel, et soovite kogu andmed kustutada?')) {
+      localStorage.removeItem('habits');
+      localStorage.removeItem('history');
+      setHabits([]);
+    }
+  };
 
   return (
     <div className="main-content">
@@ -243,9 +278,14 @@ const Habits: React.FC = () => {
           Negatiivsed
         </button>
       </div>
-      <NavLink to="/add-habit" className="add-button">
-        Lisa Harjumus
-      </NavLink>
+      <div className="add-habit-button">
+        <NavLink to="/add-habit" className="add-button">
+          Lisa Harjumus
+        </NavLink>
+        <button className="clear-data-button" onClick={handleClearData}>
+          Puhasta Andmed
+        </button>
+      </div>
       {filteredHabits.length === 0 ? (
         <p className="empty-text">Selles kategoorias harjumusi pole.</p>
       ) : (

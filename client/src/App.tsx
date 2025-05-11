@@ -25,18 +25,18 @@ type HistoryEntry = {
 const Sidebar: React.FC = () => {
   return (
     <div className="sidebar">
-      <h2 className="sidebar-title">Habit Tracker</h2>
+      <h2 className="sidebar-title">Harjumuste Jälgija</h2>
       <NavLink to="/" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
-        Главная
+        Avaleht
       </NavLink>
       <NavLink to="/habits" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
-        Привычки
+        Harjumused
       </NavLink>
       <NavLink to="/stats" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
-        Статистика
+        Statistika
       </NavLink>
       <NavLink to="/history" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
-        История
+        Ajalugu
       </NavLink>
     </div>
   );
@@ -62,17 +62,38 @@ const Home: React.FC = () => {
   const negativeProgress = activeHabits
     .filter((h) => h.category === 'negative')
     .reduce((sum, h) => sum + h.progress.reduce((s, p) => s + p.count, 0), 0);
-  const motivation = positiveProgress > negativeProgress ? 'Отличная работа! Продолжайте развивать хорошие привычки!' : 'Не сдавайтесь! Попробуйте уменьшить срывы.';
+  const motivation = positiveProgress > negativeProgress ? 'Suurepärane töö! Jätka positiivsete harjumuste arendamist!' : 'Ära anna alla! Proovi vähendada tagasilööke.';
+
+  // Данные для сборной статистики за неделю
+  const getLastNDays = (days: number) => {
+    const dates = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+  const days = getLastNDays(7);
+  const statsData = days.map((date) => ({
+    date,
+    positive: habits
+      .filter((h) => h.category === 'positive' && h.isActive)
+      .reduce((sum, h) => sum + (h.progress.find((p) => p.date === date)?.count || 0), 0),
+    negative: habits
+      .filter((h) => h.category === 'negative' && h.isActive)
+      .reduce((sum, h) => sum + (h.progress.find((p) => p.date === date)?.count || 0), 0),
+  }));
 
   return (
     <div className="main-content">
-      <h1>Главная</h1>
+      <h1>Avaleht</h1>
       <p className="motivation">{motivation}</p>
       <div className="overview">
         <div className="overview-section">
-          <h2>Текущие привычки</h2>
+          <h2>Aktiivsed Harjumused</h2>
           {activeHabits.length === 0 ? (
-            <p className="empty-text">Нет активных привычек. Добавьте новую!</p>
+            <p className="empty-text">Aktiivseid harjumusi pole. Lisa uus!</p>
           ) : (
             <div className="habit-grid">
               {activeHabits.map((habit) => (
@@ -82,20 +103,36 @@ const Home: React.FC = () => {
           )}
         </div>
         <div className="overview-section">
-          <h2>Последняя активность</h2>
+          <h2>Viimased Tegevused</h2>
           {recentHistory.length === 0 ? (
-            <p className="empty-text">Нет записей в истории.</p>
+            <p className="empty-text">Ajaloo kirjeid pole.</p>
           ) : (
             <div className="history-list">
               {recentHistory.map((entry) => (
-                <div key={entry.id} className="history-entry">
+                <div key={entry.id} className={`history-entry ${entry.category === 'positive' ? 'positive' : 'negative'}`}>
                   <p>
-                    {entry.date}: {entry.category === 'positive' ? 'Выполнил' : 'Сорвался'}{' '}
-                    "{habits.find((h) => h.id === entry.habitId)?.name}" — {entry.count} раз
+                    {entry.date}: {entry.category === 'positive' ? 'Täidetud' : 'Ebaõnnestumine'}{' '}
+                    "{habits.find((h) => h.id === entry.habitId)?.name}" — {entry.count} korda
                   </p>
                 </div>
               ))}
             </div>
+          )}
+        </div>
+        <div className="overview-section">
+          <h2>Nädala Statistika</h2>
+          {statsData.every((d) => d.positive === 0 && d.negative === 0) ? (
+            <p className="empty-text">Andmed puuduvad.</p>
+          ) : (
+            <LineChart width={400} height={200} data={statsData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="positive" stroke="#2ecc71" name="Täitmine" />
+              <Line type="monotone" dataKey="negative" stroke="#e74c3c" name="Ebaõnnestumised" />
+            </LineChart>
           )}
         </div>
       </div>
@@ -109,22 +146,11 @@ const HabitCard: React.FC<{
   setHabits: React.Dispatch<React.SetStateAction<Habit[]>>;
   addHistoryEntry: (entry: HistoryEntry) => void;
 }> = ({ habit, setHabits, addHistoryEntry }) => {
-  const [count, setCount] = useState(0);
-
   const handleTrack = () => {
-    if (count < 0) {
-      alert('Количество не может быть отрицательным');
-      return;
-    }
-    if (count === 0) {
-      alert('Укажите количество выполнений или срывов');
-      return;
-    }
-
     const updatedHabits = [...JSON.parse(localStorage.getItem('habits') || '[]')];
     const habitIndex = updatedHabits.findIndex((h: Habit) => h.id === habit.id);
     const today = new Date().toISOString().split('T')[0];
-    updatedHabits[habitIndex].progress.push({ date: today, count });
+    updatedHabits[habitIndex].progress.push({ date: today, count: 1 });
     localStorage.setItem('habits', JSON.stringify(updatedHabits));
     setHabits(updatedHabits);
 
@@ -132,13 +158,11 @@ const HabitCard: React.FC<{
       id: Date.now().toString(),
       habitId: habit.id,
       date: today,
-      count,
+      count: 1,
       category: habit.category,
     };
     addHistoryEntry(newHistoryEntry);
     localStorage.setItem('history', JSON.stringify([...JSON.parse(localStorage.getItem('history') || '[]'), newHistoryEntry]));
-
-    setCount(0);
   };
 
   const toggleActive = () => {
@@ -151,22 +175,17 @@ const HabitCard: React.FC<{
 
   return (
     <div className={`habit-card ${habit.category === 'positive' ? 'positive' : 'negative'}`}>
-      <h3>{habit.name}</h3>
-      <p>Частота: {habit.frequency === 'daily' ? 'Ежедневно' : 'Еженедельно'}</p>
-      <p>Категория: {habit.category === 'positive' ? 'Положительная' : 'Отрицательная'}</p>
-      <input
-        type="number"
-        min="0"
-        value={count}
-        onChange={(e) => setCount(Number(e.target.value))}
-        className="input"
-        placeholder="Количество"
-      />
+      <h3>
+        {habit.category === 'positive' ? '✅ ' : '❌ '}
+        {habit.name}
+      </h3>
+      <p>Sagedus: {habit.frequency === 'daily' ? 'Igapäevane' : 'Iganädalane'}</p>
+      <p>Kategooria: {habit.category === 'positive' ? 'Positiivne' : 'Negatiivne'}</p>
       <button className="track-button" onClick={handleTrack}>
-        {habit.category === 'positive' ? 'Отметить выполнение' : 'Отметить срыв'}
+        {habit.category === 'positive' ? 'Märgi Täitmine' : 'Märgi Ebaõnnestumine'}
       </button>
       <button className="toggle-active-button" onClick={toggleActive}>
-        {habit.isActive ? 'Сделать неактуальной' : 'Сделать актуальной'}
+        {habit.isActive ? 'Muuda Mitteaktiivseks' : 'Muuda Aktiivseks'}
       </button>
     </div>
   );
@@ -176,53 +195,59 @@ const HabitCard: React.FC<{
 const Habits: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [tab, setTab] = useState<'active' | 'inactive'>('active');
-  const [category, setCategory] = useState<'positive' | 'negative'>('positive');
+  const [category, setCategory] = useState<'all' | 'positive' | 'negative'>('all');
 
   useEffect(() => {
     const storedHabits = localStorage.getItem('habits');
     if (storedHabits) setHabits(JSON.parse(storedHabits));
   }, []);
 
-  const filteredHabits = habits.filter(
-    (habit) => habit.isActive === (tab === 'active') && habit.category === category
+  const filteredHabits = habits.filter((habit) =>
+    habit.isActive === (tab === 'active') && (category === 'all' || habit.category === category)
   );
 
   return (
     <div className="main-content">
-      <h1>Привычки</h1>
+      <h1>Harjumused</h1>
       <div className="tabs">
         <button
           className={`tab ${tab === 'active' ? 'active' : ''}`}
           onClick={() => setTab('active')}
         >
-          Актуальные
+          Aktiivsed
         </button>
         <button
           className={`tab ${tab === 'inactive' ? 'active' : ''}`}
           onClick={() => setTab('inactive')}
         >
-          Неактуальные
+          Mitteaktiivsed
         </button>
       </div>
       <div className="category-tabs">
         <button
+          className={`tab ${category === 'all' ? 'active' : ''}`}
+          onClick={() => setCategory('all')}
+        >
+          Kõik
+        </button>
+        <button
           className={`tab ${category === 'positive' ? 'active' : ''}`}
           onClick={() => setCategory('positive')}
         >
-          Положительные
+          Positiivsed
         </button>
         <button
           className={`tab ${category === 'negative' ? 'active' : ''}`}
           onClick={() => setCategory('negative')}
         >
-          Отрицательные
+          Negatiivsed
         </button>
       </div>
       <NavLink to="/add-habit" className="add-button">
-        Добавить привычку
+        Lisa Harjumus
       </NavLink>
       {filteredHabits.length === 0 ? (
-        <p className="empty-text">Нет привычек в этой категории.</p>
+        <p className="empty-text">Selles kategoorias harjumusi pole.</p>
       ) : (
         <div className="habit-grid">
           {filteredHabits.map((habit) => (
@@ -250,7 +275,7 @@ const AddHabit: React.FC = () => {
 
   const handleAddHabit = () => {
     if (!name.trim()) {
-      alert('Введите название привычки');
+      alert('Sisesta harjumuse nimi');
       return;
     }
 
@@ -273,36 +298,36 @@ const AddHabit: React.FC = () => {
 
   return (
     <div className="main-content">
-      <h1>Новая привычка</h1>
+      <h1>Uus Harjumus</h1>
       <div className="form-container">
-        <label>Название привычки</label>
+        <label>Harjumuse Nimi</label>
         <input
           type="text"
-          placeholder="Введите название"
+          placeholder="Sisesta nimi"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="input"
         />
-        <label>Частота</label>
+        <label>Sagedus</label>
         <select
           value={frequency}
           onChange={(e) => setFrequency(e.target.value as 'daily' | 'weekly')}
           className="select"
         >
-          <option value="daily">Ежедневно</option>
-          <option value="weekly">Еженедельно</option>
+          <option value="daily">Igapäevane</option>
+          <option value="weekly">Iganädalane</option>
         </select>
-        <label>Категория</label>
+        <label>Kategooria</label>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value as 'positive' | 'negative')}
           className="select"
         >
-          <option value="positive">Положительная</option>
-          <option value="negative">Отрицательная</option>
+          <option value="positive">Positiivne</option>
+          <option value="negative">Negatiivne</option>
         </select>
         <button className="add-button" onClick={handleAddHabit}>
-          Сохранить
+          Salvesta
         </button>
       </div>
     </div>
@@ -345,25 +370,25 @@ const Stats: React.FC = () => {
 
   return (
     <div className="main-content">
-      <h1>Статистика</h1>
+      <h1>Statistika</h1>
       <div className="filter-tabs">
         <button
           className={`tab ${timeFilter === 'week' ? 'active' : ''}`}
           onClick={() => setTimeFilter('week')}
         >
-          Неделя
+          Nädal
         </button>
         <button
           className={`tab ${timeFilter === 'month' ? 'active' : ''}`}
           onClick={() => setTimeFilter('month')}
         >
-          Месяц
+          Kuu
         </button>
       </div>
       <div className="stats-container">
-        <h2>Положительные привычки</h2>
+        <h2>Positiivsed Harjumused</h2>
         {positiveData.every((d) => d.count === 0) ? (
-          <p className="empty-text">Нет данных для положительных привычек.</p>
+          <p className="empty-text">Positiivsete harjumuste andmed puuduvad.</p>
         ) : (
           <LineChart width={600} height={300} data={positiveData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -371,12 +396,12 @@ const Stats: React.FC = () => {
             <YAxis />
             <Tooltip />
             <Legend />
-            <Line type="monotone" dataKey="count" stroke="#2ecc71" name="Выполнения" />
+            <Line type="monotone" dataKey="count" stroke="#2ecc71" name="Täitmine" />
           </LineChart>
         )}
-        <h2>Отрицательные привычки</h2>
+        <h2>Negatiivsed Harjumused</h2>
         {negativeData.every((d) => d.count === 0) ? (
-          <p className="empty-text">Нет данных для отрицательных привычек.</p>
+          <p className="empty-text">Negatiivsete harjumuste andmed puuduvad.</p>
         ) : (
           <LineChart width={600} height={300} data={negativeData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -384,7 +409,7 @@ const Stats: React.FC = () => {
             <YAxis />
             <Tooltip />
             <Legend />
-            <Line type="monotone" dataKey="count" stroke="#e74c3c" name="Срывы" />
+            <Line type="monotone" dataKey="count" stroke="#e74c3c" name="Ebaõnnestumised" />
           </LineChart>
         )}
       </div>
@@ -414,22 +439,22 @@ const History: React.FC = () => {
 
   return (
     <div className="main-content">
-      <h1>История</h1>
+      <h1>Ajalugu</h1>
       <div className="filter-container">
         <div>
-          <label>Категория:</label>
+          <label>Kategooria:</label>
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as 'all' | 'positive' | 'negative')}
             className="select"
           >
-            <option value="all">Все</option>
-            <option value="positive">Положительные</option>
-            <option value="negative">Отрицательные</option>
+            <option value="all">Kõik</option>
+            <option value="positive">Positiivsed</option>
+            <option value="negative">Negatiivsed</option>
           </select>
         </div>
         <div>
-          <label>Дата:</label>
+          <label>Kuupäev:</label>
           <input
             type="date"
             value={dateFilter}
@@ -439,14 +464,14 @@ const History: React.FC = () => {
         </div>
       </div>
       {filteredHistory.length === 0 ? (
-        <p className="empty-text">Нет записей в истории.</p>
+        <p className="empty-text">Ajaloo kirjeid pole.</p>
       ) : (
         <div className="history-list">
           {filteredHistory.map((entry) => (
-            <div key={entry.id} className="history-entry">
+            <div key={entry.id} className={`history-entry ${entry.category === 'positive' ? 'positive' : 'negative'}`}>
               <p>
-                {entry.date}: {entry.category === 'positive' ? 'Выполнил' : 'Сорвался'}{' '}
-                "{habits.find((h) => h.id === entry.habitId)?.name}" — {entry.count} раз
+                {entry.date}: {entry.category === 'positive' ? 'Täidetud' : 'Ebaõnnestumine'}{' '}
+                "{habits.find((h) => h.id === entry.habitId)?.name}" — {entry.count} korda
               </p>
             </div>
           ))}
